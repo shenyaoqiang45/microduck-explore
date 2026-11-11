@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## MicroDuck Explore scope
+
+- The first milestone is a locally reproducible MuJoCo simulation and policy-evaluation loop. Keep the upstream trained MLP only as an optional environment baseline; do not use its actions as demonstrations for the initial replacement-policy work.
+- The target replacement controller must not use an MLP architecture or require trained MLP weights at runtime. Preserve upstream policy assets and interfaces until an independent controller has been validated.
+- Prefer feedback-based, non-neural control and measurable rollout evaluation. Report velocity tracking, lateral drift, body sway, height, and falls; do not claim improvement from a single metric.
+- Keep initial work in simulation. Do not treat real-robot deployment as in scope without explicit confirmation.
+
 RL training environments for Microduck — a ~800 g, ~25 cm tall bipedal
 robot with 14 Dynamixel XL330 servos — built on [mjlab](https://github.com/mujocolab/mjlab)
 (MuJoCo Warp) with PPO (rsl_rl). Policies are trained here at 50 Hz, exported to

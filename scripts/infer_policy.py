@@ -8,16 +8,20 @@ import math
 import os
 import pickle
 import queue
-import select
 import sys
-import termios
 import threading
 import time
-import tty
 import numpy as np
 import mujoco
 import mujoco.viewer
 import onnxruntime as ort
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import select
+    import termios
+    import tty
 
 MICRODUCK_XML = "src/mjlab_microduck/robot/microduck/scene.xml"
 # MICRODUCK_XML = "src/mjlab_microduck/robot/microduck/scene_ramps.xml"
@@ -147,9 +151,9 @@ class TerminalInput:
     Replaces the MuJoCo viewer key_callback: keypresses in the viewer window
     also fire the viewer's built-in visualization shortcuts (frames, labels,
     rendering toggles…), so commands are read from the terminal instead.
-    Arrow keys arrive as ESC [ A/B/C/D escape sequences and are translated to
-    symbolic names ("up"/"down"/"left"/"right"); letters are lowercased.
-    cbreak (not raw) mode keeps ISIG enabled, so Ctrl+C still works.
+    Arrow keys are translated to symbolic names ("up"/"down"/"left"/"right");
+    letters are lowercased. On POSIX, cbreak (not raw) mode keeps ISIG enabled,
+    so Ctrl+C still works.
     """
 
     _ARROWS = {"A": "up", "B": "down", "C": "right", "D": "left"}
@@ -165,8 +169,9 @@ class TerminalInput:
         if not self.enabled:
             print("WARNING: stdin is not a TTY — keyboard control disabled")
             return self
-        self._old_attrs = termios.tcgetattr(self._fd)
-        tty.setcbreak(self._fd)
+        if os.name != "nt":
+            self._old_attrs = termios.tcgetattr(self._fd)
+            tty.setcbreak(self._fd)
         threading.Thread(target=self._reader, daemon=True).start()
         return self
 
@@ -176,9 +181,15 @@ class TerminalInput:
             termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_attrs)
 
     def _read1(self, timeout):
-        """Read one byte from stdin, or None on timeout. os.read (unbuffered):
-        buffered sys.stdin.read would swallow escape-sequence bytes past what
-        select reported ready."""
+        """Read one key from stdin, or None on timeout."""
+        if os.name == "nt":
+            deadline = time.monotonic() + timeout
+            while not self._stop.is_set() and time.monotonic() < deadline:
+                if msvcrt.kbhit():
+                    return msvcrt.getwch()
+                time.sleep(0.005)
+            return None
+
         r, _, _ = select.select([self._fd], [], [], timeout)
         if not r:
             return None
@@ -189,6 +200,20 @@ class TerminalInput:
         while not self._stop.is_set():
             ch = self._read1(0.1)
             if not ch:
+                continue
+            if os.name == "nt":
+                if ch in ("\x00", "\xe0"):
+                    scan_code = self._read1(0.05)
+                    name = {
+                        "H": "up",
+                        "P": "down",
+                        "M": "right",
+                        "K": "left",
+                    }.get(scan_code)
+                    if name:
+                        self._queue.put(name)
+                    continue
+                self._queue.put(ch.lower() if ch.isalpha() else ch)
                 continue
             if ch == "\x1b":  # possible arrow-key escape sequence
                 if self._read1(0.05) == "[":

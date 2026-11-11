@@ -43,7 +43,15 @@ uv run publish --onnx output.onnx --repo <user>/microduck-<name> --kind episodic
 
 # drive the exported policy in CPU MuJoCo with the keyboard
 uv run scripts/infer_policy.py --walking output.onnx
+
+# run a headless rollout and report velocity, sway, height, and falls
+uv run scripts/evaluate_policy.py --walking velstand.onnx --lin-vel-x 0.3 --duration 10
 ```
+
+`scripts/evaluate_policy.py` uses the CPU MuJoCo scene and BAM actuator model to
+produce repeatable locomotion metrics without opening a viewer. It expects a
+61-observation, 14-action walking policy and is useful for comparing policy
+changes against a fixed command.
 
 Resume from a checkpoint:
 
