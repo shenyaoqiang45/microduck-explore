@@ -53,6 +53,34 @@ produce repeatable locomotion metrics without opening a viewer. It expects a
 61-observation, 14-action walking policy and is useful for comparing policy
 changes against a fixed command.
 
+For an independent classical-feedback balance experiment that does not load an
+ONNX policy or trained weights, run:
+
+```bash
+uv run scripts/classic_controller.py --duration 10 --initial-pitch 0.05
+```
+
+This controller currently tests attitude stabilization from a standing pose; it
+is not yet a walking controller.
+
+To distill the walking teacher offline into a non-MLP linear-feedback candidate
+with a periodic gait reference, then immediately test it without loading the
+teacher in the student rollout:
+
+```powershell
+$policyDir = Join-Path $env:LOCALAPPDATA 'microduck\policies'
+uv run scripts\distill_classic.py `
+    --teacher "$policyDir\alpha_walking.onnx" `
+    --output "$policyDir\classic_feedback_candidate.npz" `
+    --dataset-output "$policyDir\teacher_rollout.npz" `
+    --lin-vel-x 0.3 --duration 10 --validation-duration 10
+```
+
+The generated controller artifact contains only linear feedback coefficients
+and gait-reference parameters; it does not contain or load the teacher network.
+The command reports whether the candidate passes closed-loop walking validation.
+Do not treat an unvalidated candidate as a walking policy.
+
 Resume from a checkpoint:
 
 ```bash
